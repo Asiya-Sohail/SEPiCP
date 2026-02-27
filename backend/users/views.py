@@ -45,7 +45,3 @@ class AdminDashboardView(APIView):
             "total_users": total_users,
             "admin_users": admin_users,
         })
-
-# @api_view(['GET'])
-# def test_api(request):
-#   return Response({"message" : "Backend connedcted successfully!"})
