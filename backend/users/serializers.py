@@ -20,6 +20,11 @@ class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "username", "email", "password"]
+    # ✅ Custom validation for username
+    def validate_username(self, value):
+        if " " in value:
+            raise serializers.ValidationError("Username cannot contain spaces.")
+        return value
 
     def validate_email(self, value: str) -> str:
         if User.objects.filter(email=value).exists():

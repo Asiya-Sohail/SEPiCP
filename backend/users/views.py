@@ -13,6 +13,13 @@ from .services.cleaning_service import clean_dataset
 User = get_user_model()
 
 
+#CreateAPIView internally does 
+# serializer = RegisterSerializer(data=request.data)
+# if serializer.is_valid():
+#     serializer.save()
+# else:
+#     return serializer.errors
+
 # 1️⃣ Register View
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
