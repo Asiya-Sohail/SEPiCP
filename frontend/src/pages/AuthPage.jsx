@@ -10,11 +10,6 @@ import { Input } from '../components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 
 const AuthPage = () => {
-//   useEffect(() => {
-//   fetch("http://127.0.0.1:8000/api/test/")
-//     .then(res => res.json())
-//     .then(data => console.log(data));
-// }, []);
   const { login, register } = useAuth();
   const [role, setRole] = useState('student');
   const [isRegister, setIsRegister] = useState(false);
