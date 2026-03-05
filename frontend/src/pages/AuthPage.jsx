@@ -3,18 +3,13 @@ import { useAuth } from '../context/AuthContext';
 import { Shield, GraduationCap, Lock, Mail, ArrowRight, Info, AlertTriangle, User, Database } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
-import { theme } from '../styles/theme';
+// import { theme } from '../styles/theme';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 
 const AuthPage = () => {
-//   useEffect(() => {
-//   fetch("http://127.0.0.1:8000/api/test/")
-//     .then(res => res.json())
-//     .then(data => console.log(data));
-// }, []);
   const { login, register } = useAuth();
   const [role, setRole] = useState('student');
   const [isRegister, setIsRegister] = useState(false);
@@ -24,8 +19,7 @@ const AuthPage = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
@@ -36,15 +30,20 @@ const AuthPage = () => {
 
     setLoading(true);
 
-    let result;
-    if (isRegister && role === 'student') {
-      result = register(fullName, email, password);
-    } else {
-      result = login(email, password, role);
-    }
+    try {
+      let result;
+      if (isRegister && role === 'student') {
+        result = await register(fullName, email, password);
+      } else {
+        result = await login(email, password, role);
+      }
 
-    if (!result.success) {
-      setError(result.message);
+      if (!result.success) {
+        setError(result.message);
+      }
+    } catch (err) {
+      setError("An unexpected error occurred.");
+    } finally {
       setLoading(false);
     }
   };

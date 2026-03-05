@@ -40,7 +40,7 @@ const TopBar = () => {
         <header className="h-14 flex items-center justify-between px-6 lg:px-10 border-b border-slate-100 bg-white/50 backdrop-blur-md sticky top-0 z-40">
             <nav className="flex items-center gap-2 text-[12px] font-medium transition-all ml-12 lg:ml-0">
                 {breadcrumbs.map((crumb, index) => (
-                    <React.Fragment key={crumb.path}>
+                    <React.Fragment key={`${crumb.path}-${index}`}>
                         {index > 0 && <ChevronRight className="w-3 h-3 text-slate-300 mx-0.5" />}
                         <Link
                             to={crumb.path}

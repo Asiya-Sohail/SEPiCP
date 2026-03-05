@@ -1,8 +1,8 @@
 # Validator + converter
-
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from .models import Dataset
 
 User = get_user_model()
 
@@ -19,7 +19,12 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "password"]
+        fields = ["id", "username", "email", "password", "first_name"]
+    # ✅ Custom validation for username
+    def validate_username(self, value):
+        if " " in value:
+            raise serializers.ValidationError("Username cannot contain spaces.")
+        return value
 
     def validate_email(self, value: str) -> str:
         if User.objects.filter(email=value).exists():
@@ -36,6 +41,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             username=validated_data["username"],
             email=validated_data["email"],
             password=validated_data["password"],
+            first_name=validated_data.get("first_name", "")
         )
         user.is_staff = False
         user.is_superuser = False
@@ -52,3 +58,9 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "username", "email", "is_staff", "is_superuser", "date_joined"]
         read_only_fields = ["id", "email", "is_staff", "is_superuser", "date_joined"]
+
+class DatasetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Dataset
+        fields = ['id', 'cleaned_data', 'created_at']
+        read_only_fields = ['cleaned_data', 'created_at']

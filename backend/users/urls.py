@@ -6,6 +6,9 @@ from .views import (
     ProfileView,
     AdminUserListView,
     AdminDashboardView,
+    UploadDatasetView,
+    UserDatasetListView,
+    DatasetDetailView,
 )
 
 urlpatterns = [
@@ -16,6 +19,9 @@ urlpatterns = [
 
     # Normal user
     path("profile/", ProfileView.as_view()),
+    path("datasets/upload/", UploadDatasetView.as_view()),
+    path("datasets/", UserDatasetListView.as_view()),
+    path("datasets/<int:pk>/", DatasetDetailView.as_view()),
 
     # Admin-only
     path("admin/users/", AdminUserListView.as_view()),

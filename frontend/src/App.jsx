@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { LayoutDashboard, Database, ArrowRight, BarChart3 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
@@ -12,9 +12,11 @@ import HistoryPage from './pages/HistoryPage';
 import Dashboard from './pages/Dashboard';
 import AdminPanel from './pages/AdminPanel';
 import { useAuth } from './context/AuthContext';
+import { theme } from './styles/theme';
 
 const Layout = ({ children }) => {
   const location = useLocation();
+
   return (
     <div className="flex min-h-screen relative overflow-hidden bg-white"> {/* Changed background color */}
       <Sidebar />

@@ -1,4 +1,5 @@
 import pymysql
 
-# Use PyMySQL as MySQLdb (Django 4.2 accepts mysqlclient >= 1.4.0; PyMySQL works without version patch).
+# Spoof the version to satisfy Django's requirement for mysqlclient >= 2.2.1
+pymysql.version_info = (2, 2, 1, 'final', 0)
 pymysql.install_as_MySQLdb()

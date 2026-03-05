@@ -43,80 +43,73 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('research_activities', JSON.stringify(updatedActivities));
   };
 
-  const register = (name, email, password) => {
-    if (registeredUsers.find(u => u.email === email)) {
-      return { success: false, message: 'User already exists.' };
+  const register = async (name, email, password) => {
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/register/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: email.split('@')[0], // Use email prefix as username for now
+          email: email,
+          password: password,
+          first_name: name
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error("Registration failed with status", response.status, "and data:", data);
+
+        // Check for specific field errors from Django Rest Framework
+        const errorMsg =
+          data.password?.[0] ||
+          data.email?.[0] ||
+          data.username?.[0] ||
+          data.non_field_errors?.[0] ||
+          data.message ||
+          "Registration failed: Please check your input fields.";
+
+        return { success: false, message: errorMsg };
+      }
+
+      // Automatically log in after registration might need another call if backend doesn't return tokens
+      return login(email, password, 'student');
+    } catch (err) {
+      return { success: false, message: "Server error. Please try again." };
     }
-
-    const newUser = {
-      id: `stu-${Math.floor(Math.random() * 1000)}`,
-      name,
-      email,
-      password,
-      role: 'student',
-      department: 'Undergraduate Statistics',
-    };
-
-    const updatedUsers = [...registeredUsers, newUser];
-    setRegisteredUsers(updatedUsers);
-    localStorage.setItem('registered_users', JSON.stringify(updatedUsers));
-
-    // Automatically log in after registration
-    setUser(newUser);
-    localStorage.setItem('research_user', JSON.stringify(newUser));
-    localStorage.setItem('research_token', 'student-token-abc');
-    logActivity('login', 'New user registered and logged in', newUser);
-
-    return { success: true };
   };
 
-  const login = (email, password, role) => {
-    // Admin Validation
-    if (role === 'admin') {
-      if (email === 'nedscholar@gmail.com' && password === '123456') {
-        const adminUser = {
-          id: 'admin-001',
-          name: 'Principal Administrator',
-          email: 'nedscholar@gmail.com',
-          role: 'admin',
-          department: 'Executive Research Board',
-        };
-        setUser(adminUser);
-        localStorage.setItem('research_user', JSON.stringify(adminUser));
-        localStorage.setItem('research_token', 'admin-token-xyz');
-        logActivity('login', 'Admin logged into dashboard', adminUser);
-        return { success: true };
+  const login = async (email, password, role) => {
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/login/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { success: false, message: "Invalid credentials." };
       }
-      return { success: false, message: 'Invalid administrator credentials.' };
-    }
 
-    // Check Registered Users first
-    const registeredUser = registeredUsers.find(u => u.email === email && u.password === password);
-    if (registeredUser) {
-      setUser(registeredUser);
-      localStorage.setItem('research_user', JSON.stringify(registeredUser));
-      localStorage.setItem('research_token', 'student-token-abc');
-      logActivity('login', 'User logged in via credentials', registeredUser);
-      return { success: true };
-    }
-
-    // Student Validation (Simulated fallback)
-    if (role === 'student') {
-      const studentUser = {
-        id: `stu-${Math.floor(Math.random() * 1000)}`,
-        name: email.split('@')[0].split('.').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' '),
+      const userData = {
+        name: email.split('@')[0], // Fallback if name not in JWT
         email: email,
-        role: 'student',
-        department: 'Undergraduate Statistics',
+        role: role, // You might want to get this from the backend/JWT
       };
-      setUser(studentUser);
-      localStorage.setItem('research_user', JSON.stringify(studentUser));
-      localStorage.setItem('research_token', 'student-token-abc');
-      logActivity('login', 'User logged in via simulation', studentUser);
-      return { success: true };
-    }
 
-    return { success: false, message: 'Select a valid role.' };
+      setUser(userData);
+      localStorage.setItem('research_user', JSON.stringify(userData));
+      localStorage.setItem('research_token', data.access);
+      localStorage.setItem('research_refresh_token', data.refresh);
+
+      logActivity('login', `${role} logged into dashboard`, userData);
+      return { success: true };
+    } catch (err) {
+      return { success: false, message: "Server error. Please try again." };
+    }
   };
 
   const logout = () => {

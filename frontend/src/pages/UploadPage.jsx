@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import {
   FileSpreadsheet,
@@ -8,7 +8,10 @@ import {
   Settings2,
   ArrowRight,
   RefreshCw,
-  History
+  History,
+  Loader2,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DataPreviewTable from '../components/DataPreviewTable';
@@ -26,6 +29,63 @@ const UploadPage = () => {
   const { user, logActivity } = useAuth();
   const [file, setFile] = useState(null);
   const [isCleaning, setIsCleaning] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const [previewData, setPreviewData] = useState([]);
+  const [dynamicColumns, setDynamicColumns] = useState([]);
+  const [isLoadingRecent, setIsLoadingRecent] = useState(false);
+  const [overlayStatus, setOverlayStatus] = useState(null);
+
+  const showOverlay = (status, title, message) => {
+    setOverlayStatus({ status, title, message });
+    if (status !== 'loading') {
+      setTimeout(() => {
+        setOverlayStatus(null);
+        setIsUploading(false);
+        setIsLoadingRecent(false);
+      }, 3000);
+    }
+  };
+
+  useEffect(() => {
+    const specificId = localStorage.getItem('load_dataset_id');
+    if (specificId) {
+      handleLoadSpecific(specificId);
+      localStorage.removeItem('load_dataset_id');
+    }
+  }, []);
+
+  const handleLoadSpecific = async (datasetId) => {
+    setIsLoadingRecent(true);
+    showOverlay('loading', 'Loading Registry', 'Securely pulling your clean historical data from the server vault...');
+    const token = localStorage.getItem('research_token');
+
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/datasets/${datasetId}/`, {
+        method: "GET",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setPreviewData(data.cleaned_data);
+        if (data.cleaned_data && data.cleaned_data.length > 0) {
+          const rawCols = Object.keys(data.cleaned_data[0]);
+          const cols = rawCols.map(col => ({
+            header: col.toUpperCase().replace(/_/g, ' '),
+            id: col,
+            accessorFn: (row) => row[col],
+            cell: (info) => <span className="text-slate-600">{String(info.getValue() || '')}</span>
+          }));
+          setDynamicColumns(cols);
+        }
+        showOverlay('success', 'Dataset Loaded', 'Dataset loaded from history successfully!');
+      } else {
+        showOverlay('error', 'Fetch Failed', 'Failed to fetch the requested dataset.');
+      }
+    } catch (err) {
+      showOverlay('error', 'Network Error', 'Network error loading history dataset.');
+    }
+  };
 
   const onDrop = useCallback((acceptedFiles) => {
     if (acceptedFiles.length > 0) {
@@ -42,54 +102,175 @@ const UploadPage = () => {
     multiple: false
   });
 
-  const handleProcess = () => {
-    if (file) {
-      logActivity('upload', `Uploaded and processed dataset: ${file.name}`);
-      alert('Data processed successfully and logged to your activity history.');
+
+
+  const handleLoadRecent = async () => {
+    setIsLoadingRecent(true);
+    showOverlay('loading', 'Loading Registry', 'Securely pulling your clean historical data from the server vault...');
+    const token = localStorage.getItem('research_token');
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/datasets/", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+
+      if (response.status === 401) {
+        showOverlay('error', 'Session Expired', 'Your security token has expired. Please log out and log back in.');
+        return;
+      }
+
+      const data = await response.json();
+      if (response.ok && data.length > 0) {
+        const latestDataset = data[0]; // Gets most recent based on django order_by('-created_at')
+        setPreviewData(latestDataset.cleaned_data);
+
+        if (latestDataset.cleaned_data && latestDataset.cleaned_data.length > 0) {
+          const rawCols = Object.keys(latestDataset.cleaned_data[0]);
+          const cols = rawCols.map(col => ({
+            header: col.toUpperCase().replace(/_/g, ' '),
+            id: col,
+            accessorFn: (row) => row[col],
+            cell: (info) => <span className="text-slate-600">{String(info.getValue() || '')}</span>
+          }));
+          setDynamicColumns(cols);
+        }
+        showOverlay('success', 'Registry Loaded', 'Successfully loaded your most recent historic dataset from the database!');
+      } else if (response.ok) {
+        showOverlay('error', 'No History', 'No historic datasets found in the database. Please upload a new dataset.');
+      } else {
+        showOverlay('error', 'Fetch Failed', 'Failed to fetch dataset history.');
+      }
+    } catch (err) {
+      showOverlay('error', 'Server Error', 'Server error while fetching historic data.');
     }
   };
 
-  const mockData = [
-    { id: 10245, name: 'Alice Johnson', dept: 'Computer Science', gpa: 3.85, date: '2023-09-01', status: 'Active', credits: 45 },
-    { id: 10246, name: 'Mark Smith', dept: 'Physics', gpa: 3.72, date: '2023-09-01', status: 'Active', credits: 42 },
-    { id: 10247, name: 'Elena Rodriguez', dept: 'Biology', gpa: 3.91, date: '2023-09-02', status: 'On Leave', credits: 38 },
-    { id: 10248, name: 'David Kim', dept: 'Mathematics', gpa: null, date: '2023-09-05', status: 'Active', credits: 44 },
-    { id: 10249, name: 'Sarah Lee', dept: 'Chemistry', gpa: 3.65, date: '2023-09-06', status: 'Active', credits: 40 },
-  ];
+  const handleProcess = async () => {
+    if (!file) return;
 
-  const columns = [
-    { header: 'ID', accessorKey: 'id', cell: (info) => <span className="text-slate-500">{info.getValue()}</span> },
-    { header: 'STUDENT NAME', accessorKey: 'name', cell: (info) => <span className="font-black text-slate-900">{info.getValue()}</span> },
-    { header: 'DEPARTMENT', accessorKey: 'dept', cell: (info) => <span className="text-slate-500">{info.getValue()}</span> },
-    {
-      header: 'GPA',
-      accessorKey: 'gpa',
-      cell: ({ getValue }) => <span className="font-bold text-slate-700">{getValue() || '3.80'}</span>
-    },
-    { header: 'ENROLLMENT DATE', accessorKey: 'date', cell: (info) => <span className="text-slate-500">{info.getValue()}</span> },
-    {
-      header: 'STATUS',
-      accessorKey: 'status',
-      cell: ({ getValue }) => (
-        <Badge variant={getValue() === 'Active' ? 'success' : 'warning'} className="font-black text-[10px] px-2.5 py-0.5 rounded-md">
-          {getValue()}
-        </Badge>
-      )
-    },
-    { header: 'CREDITS', accessorKey: 'credits', cell: (info) => <span className="text-slate-500">{info.getValue()}</span> },
+    setIsUploading(true);
+    showOverlay('loading', 'Cleaning Dataset', 'Applying statistical handlers and removing invalid dimensions. This may take a moment...');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const token = localStorage.getItem('research_token');
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/datasets/upload/", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (response.status === 401) {
+        showOverlay('error', 'Session Expired', 'Your security token has expired. Please log out and log back in to get a fresh token.');
+        return;
+      }
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setPreviewData(data.cleaned_data);
+        const cols = data.columns.map(col => ({
+          header: col.toUpperCase().replace(/_/g, ' '),
+          id: col, // use `id` plus `accessorFn` to perfectly escape keys with dots like "act._part_1s"
+          accessorFn: (row) => row[col],
+          cell: (info) => <span className="text-slate-600">{String(info.getValue() || '')}</span>
+        }));
+        setDynamicColumns(cols);
+        logActivity('upload', `Uploaded and processed dataset: ${file.name}`);
+        showOverlay('success', 'Processing Complete', 'Data cleaned and processed successfully!');
+      } else {
+        showOverlay('error', 'Processing Failed', data.details || data.error || 'Unknown error');
+      }
+    } catch (err) {
+      showOverlay('error', 'Server Error', 'Server error connecting to backend.');
+    }
+  };
+
+  const initialColumns = [
+    { header: 'ID', accessorKey: 'id' },
+    { header: 'NAME', accessorKey: 'name' },
+    { header: 'DEPARTMENT', accessorKey: 'dept' }
   ];
 
   return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 relative">
+
+      {/* Modern Loading Overlay */}
+      <AnimatePresence>
+        {overlayStatus && (
+          <motion.div
+            initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+            animate={{ opacity: 1, backdropFilter: 'blur(8px)' }}
+            exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.9, y: 20, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="bg-white rounded-[32px] shadow-2xl p-10 max-w-sm w-full mx-4 flex flex-col items-center text-center relative overflow-hidden ring-1 ring-slate-900/5"
+            >
+              {/* Spinning gradient background effect */}
+              <div className="absolute inset-0 bg-linear-to-tr from-blue-50 to-indigo-50 opacity-50"></div>
+
+              <div className="relative z-10 space-y-6 flex flex-col items-center">
+                <div className={cn(
+                  "w-20 h-20 rounded-2xl bg-white shadow-lg flex items-center justify-center border",
+                  overlayStatus.status === 'error' ? 'border-red-100 shadow-red-100' : 'border-slate-100'
+                )}>
+                  {overlayStatus.status === 'loading' && <Loader2 className="w-10 h-10 text-[#1e3a8a] animate-spin" />}
+                  {overlayStatus.status === 'success' && <CheckCircle2 className="w-10 h-10 text-emerald-500" />}
+                  {overlayStatus.status === 'error' && <AlertCircle className="w-10 h-10 text-red-500" />}
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                    {overlayStatus.title}
+                  </h3>
+                  <p className="text-sm font-bold text-slate-500 max-w-[250px] leading-relaxed mx-auto">
+                    {overlayStatus.message}
+                  </p>
+                </div>
+              </div>
+
+              {/* Fake progress indicator */}
+              {overlayStatus.status === 'loading' && (
+                <div className="w-full h-1.5 bg-slate-100 rounded-full mt-8 overflow-hidden relative z-10">
+                  <motion.div
+                    className="absolute inset-y-0 left-0 bg-[#1e3a8a] rounded-full"
+                    initial={{ width: "0%" }}
+                    animate={{ width: "100%" }}
+                    transition={{ duration: 15, ease: "easeOut" }}
+                  />
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">Upload Research Data</h1>
           <p className="text-slate-500 mt-1.5 text-xs sm:text-sm font-medium">Manage and preprocess your .xlsx datasets.</p>
         </div>
-        <Button variant="outline" className="h-10 px-4 rounded-xl font-bold border-slate-200 bg-white text-slate-600 shadow-sm flex items-center gap-2 text-xs">
-          <History className="w-4 h-4 text-slate-400" />
-          Recent Uploads
+        <Button
+          variant="outline"
+          disabled={isLoadingRecent}
+          onClick={handleLoadRecent}
+          className="h-10 px-4 rounded-xl font-bold border-slate-200 bg-white text-slate-600 shadow-sm flex items-center gap-2 text-xs"
+        >
+          {isLoadingRecent ? <RefreshCw className="w-4 h-4 animate-spin text-slate-400" /> : <History className="w-4 h-4 text-slate-400" />}
+          {isLoadingRecent ? 'Loading...' : 'Recent Uploads'}
         </Button>
       </div>
 
@@ -132,41 +313,6 @@ const UploadPage = () => {
             </div>
           </div>
 
-          {/* Configuration Card */}
-          <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white overflow-hidden">
-            <CardHeader className="p-6 pb-4 border-b border-slate-50">
-              <CardTitle className="font-black text-slate-800 flex items-center gap-2.5 text-sm uppercase tracking-wider">
-                <Settings2 className="w-4.5 h-4.5 text-slate-400" />
-                Configuration
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 sm:p-8 space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <p className="text-slate-900 text-[13px] font-black ">Enable Auto-Cleaning</p>
-                  <p className="text-slate-400 text-[11px] font-bold leading-relaxed pr-6">Automatically handle missing values and remove duplicates.</p>
-                </div>
-                <Switch
-                  checked={isCleaning}
-                  onCheckedChange={setIsCleaning}
-                  className="data-[state=checked]:bg-[#1e3a8a]"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-0.5">Select Sheet</label>
-                <Select defaultValue="sheet1">
-                  <SelectTrigger className="w-full bg-slate-50/50 border-slate-200 rounded-xl h-11 font-bold text-slate-700 hover:bg-slate-50 transition-all text-[12px]">
-                    <SelectValue placeholder="Select Sheet" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl border-slate-100">
-                    <SelectItem value="sheet1" className="rounded-lg font-bold text-[12px]">Sheet 1 (Raw Data)</SelectItem>
-                    <SelectItem value="sheet2" className="rounded-lg font-bold text-[12px]">Sheet 2 (Clean Data)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
         <div className="lg:col-span-4 space-y-6">
@@ -175,10 +321,10 @@ const UploadPage = () => {
             <h3 className="font-black text-slate-900 mb-6 text-[11px] uppercase tracking-widest leading-none">File Details</h3>
             <div className="space-y-4">
               {[
-                { label: 'File Name', value: file?.name || 'research_data_v2.xlsx' },
-                { label: 'Size', value: file ? (file.size / (1024 * 1024)).toFixed(1) + ' MB' : '12.4 MB' },
-                { label: 'Rows', value: '1,240' },
-                { label: 'Columns', value: '8' },
+                { label: 'File Name', value: file?.name || (previewData.length > 0 ? 'Loaded Registry' : 'No file selected') },
+                { label: 'Size', value: file ? (file.size / (1024 * 1024)).toFixed(1) + ' MB' : (previewData.length > 0 ? 'N/A' : '0 MB') },
+                { label: 'Rows', value: previewData.length > 0 ? previewData.length.toLocaleString() : '0' },
+                { label: 'Columns', value: dynamicColumns.length > 0 ? dynamicColumns.length : '0' },
               ].map((detail) => (
                 <div key={detail.label} className="flex justify-between items-center text-[12px]">
                   <span className="text-slate-400 font-bold">{detail.label}</span>
@@ -197,12 +343,21 @@ const UploadPage = () => {
 
           <div className="flex flex-col sm:flex-row lg:flex-col gap-3">
             <Button
-              disabled={!file}
+              disabled={!file || isUploading}
               onClick={handleProcess}
               className="flex-1 h-12 rounded-xl bg-[#1e3a8a] text-white font-black text-[12px] uppercase tracking-widest shadow-lg shadow-blue-900/20 hover:bg-[#1a337a] transition-all flex items-center justify-center gap-2"
             >
-              Confirm & Process
-              <ArrowRight className="w-4 h-4" />
+              {isUploading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  Confirm & Process
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </Button>
             <Button
               variant="outline"
@@ -229,7 +384,10 @@ const UploadPage = () => {
           </div>
         </div>
         <div className="bg-white rounded-[32px] border border-slate-200 shadow-2xl shadow-slate-200/30 overflow-hidden">
-          <DataPreviewTable data={mockData} columns={columns} />
+          <DataPreviewTable
+            data={previewData.length > 0 ? previewData : []}
+            columns={dynamicColumns.length > 0 ? dynamicColumns : initialColumns}
+          />
         </div>
       </div>
     </div>
